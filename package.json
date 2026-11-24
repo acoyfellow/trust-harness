@@ -1,0 +1,24 @@
+{
+  "name": "trust-harness",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "sideEffects": false,
+  "scripts": {
+    "build:wasm": "sh scripts/build-wasm.sh",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "mutate": "node scripts/mutate-check.mjs",
+    "gate": "sh gate.sh"
+  },
+  "dependencies": {
+    "@alchemy.run/domain": "2.0.0-beta.87",
+    "effect": "^4.1.4"
+  },
+  "devDependencies": {
+    "@effect/vitest": "^4",
+    "@types/node": "^22",
+    "typescript": "^7.0.2",
+    "vitest": "^5.1.1"
+  }
+}

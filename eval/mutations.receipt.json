@@ -1,0 +1,74 @@
+{
+  "total": 11,
+  "killed": 11,
+  "survived": 0,
+  "killRate": 1,
+  "results": [
+    {
+      "id": "domain-skip-preflight-guard",
+      "file": "src/Turn/Turn.aggregate.ts",
+      "runner": "vitest",
+      "killed": true
+    },
+    {
+      "id": "domain-skip-call-admitted-check",
+      "file": "src/Turn/Turn.aggregate.ts",
+      "runner": "vitest",
+      "killed": true
+    },
+    {
+      "id": "domain-skip-pending-observations",
+      "file": "src/Turn/Turn.aggregate.ts",
+      "runner": "vitest",
+      "killed": true
+    },
+    {
+      "id": "domain-allow-post-close-mutation",
+      "file": "src/Turn/Turn.aggregate.ts",
+      "runner": "vitest",
+      "killed": true
+    },
+    {
+      "id": "domain-skip-verdict-retry-mapping",
+      "file": "src/Turn/Turn.aggregate.ts",
+      "runner": "vitest",
+      "killed": true
+    },
+    {
+      "id": "loader-skip-sha256-check",
+      "file": "src/wasm/loader.ts",
+      "runner": "vitest",
+      "killed": true
+    },
+    {
+      "id": "saga-skip-admit-stop",
+      "file": "src/Turn/RunTurn.saga.ts",
+      "runner": "vitest",
+      "killed": true
+    },
+    {
+      "id": "rust-preflight-drop-spoof",
+      "file": "crates/preflight/src/lib.rs",
+      "runner": "cargo-preflight",
+      "killed": true
+    },
+    {
+      "id": "rust-admit-drop-env-deny",
+      "file": "crates/admit/src/lib.rs",
+      "runner": "cargo-admit",
+      "killed": true
+    },
+    {
+      "id": "rust-observe-drop-false-success",
+      "file": "crates/observe/src/lib.rs",
+      "runner": "cargo-observe",
+      "killed": true
+    },
+    {
+      "id": "rust-verdict-drop-broken-retry",
+      "file": "crates/verdict/src/lib.rs",
+      "runner": "cargo-verdict",
+      "killed": true
+    }
+  ]
+}

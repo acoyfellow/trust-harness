@@ -1,0 +1,16 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/abi",
+    "crates/preflight",
+    "crates/admit",
+    "crates/observe",
+    "crates/verdict",
+]
+
+[profile.release]
+opt-level = "z"
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true

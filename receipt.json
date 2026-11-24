@@ -1,0 +1,31 @@
+{
+  "verifiedAt": "2026-11-24T21:36:05.482Z",
+  "gate": "PASS",
+  "checks": {
+    "cargoTest": "pass",
+    "wasmBuildAndSha256": "pass",
+    "typecheck": "pass",
+    "domainAndLiveWasmTests": "pass",
+    "failClosedMuteControl": "pass",
+    "negativeAlwaysAllowControl": "pass",
+    "mutationKillRate": "11/11",
+    "gitleaks": "clean"
+  },
+  "wasmSha256": {
+    "preflight.wasm": "5f95cbd66d973e494bc0d611641d5b34fa6080e7af872487d45a510814c24a06",
+    "admit.wasm": "ad425185ca86290b6c342c43debb25ec81b932b2dfb89e5fe40822623b6403e7",
+    "observe.wasm": "b0e78068c54a0c15e13cfa1b8b49db1401ea5c1a20c3b07615e2faadcebca1b8",
+    "verdict.wasm": "818d8f79dafcc25175e9e864672ae2acb5352d0df5bef8be1f945f038bd910c2"
+  },
+  "mutations": {
+    "total": 11,
+    "killed": 11,
+    "survived": 0
+  },
+  "documentedBypasses": [
+    "admit-bash-eval-indirection",
+    "observe-upstream-parser-lies",
+    "verdict-upstream-extractor-misread",
+    "preflight-paraphrased-injection"
+  ]
+}
