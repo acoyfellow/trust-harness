@@ -12,7 +12,9 @@ import {
 import { WasmJudge, WasmJudgeUnavailable } from "../WasmJudge.external.ts";
 import { loadPinnedBoundary, type JudgeHandle } from "./loader.ts";
 
-const defaultDistDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../dist");
+const defaultDistDir = process.env.TRUST_DIST_DIR
+  ? path.resolve(process.env.TRUST_DIST_DIR)
+  : path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../dist");
 
 const decodePreflight = Schema.decodeUnknownSync(PreflightOutput);
 const decodeAdmit = Schema.decodeUnknownSync(AdmitOutput);

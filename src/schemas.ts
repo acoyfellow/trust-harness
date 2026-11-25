@@ -42,7 +42,11 @@ export const AdmitAction = Schema.Union([
   Schema.Struct({ kind: Schema.Literal("write"), path: Schema.String, content: Schema.String }),
   Schema.Struct({ kind: Schema.Literal("edit"), path: Schema.String, payload: Schema.String }),
   Schema.Struct({ kind: Schema.Literal("bash"), command: Schema.String }),
-  Schema.Struct({ kind: Schema.Literal("lockfile"), text: Schema.String }),
+  Schema.Struct({
+    kind: Schema.Literal("lockfile"),
+    text: Schema.String,
+    policyJson: Schema.optional(Schema.String),
+  }),
 ]);
 export type AdmitAction = typeof AdmitAction.Type;
 

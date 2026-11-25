@@ -88,30 +88,35 @@ it.live("fail-closed mute control: missing wasm blocks every boundary and never 
   }),
 );
 
-it.live("fail-closed tamper control: 1-byte flipped wasm fails sha256 pin and blocks the turn", () =>
+it.live("fail-closed tamper control: 1-byte flip fails sha256 pin and blocks on all 4 boundaries", () =>
   Effect.gen(function* () {
-    const tamperedDir = "/tmp/trust-harness/tampered";
-    rmSync(tamperedDir, { recursive: true, force: true });
-    mkdirSync(tamperedDir, { recursive: true });
-    cpSync(distDir, tamperedDir, { recursive: true });
+    for (const boundary of boundaries) {
+      const tamperedDir = `/tmp/trust-harness/tampered-${boundary}`;
+      rmSync(tamperedDir, { recursive: true, force: true });
+      mkdirSync(tamperedDir, { recursive: true });
+      try {
+        cpSync(distDir, tamperedDir, { recursive: true });
+        const target = path.join(tamperedDir, `${boundary}.wasm`);
+        const bytes = readFileSync(target);
+        bytes[bytes.length - 1] = bytes[bytes.length - 1] ^ 0xff;
+        writeFileSync(target, bytes);
 
-    const target = path.join(tamperedDir, "admit.wasm");
-    const bytes = readFileSync(target);
-    bytes[bytes.length - 1] = bytes[bytes.length - 1] ^ 0xff;
-    writeFileSync(target, bytes);
+        const loaded = loadPinnedBoundary(tamperedDir, boundary);
+        expect(loaded.ok).toBe(false);
+        if (!loaded.ok) expect(loaded.error.reason).toContain("sha256 mismatch");
 
-    const loaded = loadPinnedBoundary(tamperedDir, "admit");
-    expect(loaded.ok).toBe(false);
-    if (!loaded.ok) expect(loaded.error.reason).toContain("sha256 mismatch");
-
-    const receipt = yield* runWithJudge(makeWasmJudgeLayer(tamperedDir), "mute-tampered-admit", {
-      preflight: cleanPreflight,
-      toolCalls: [{ callId: CallId.make("c1"), action: { kind: "bash", command: "ls" }, observation: cleanObservation }],
-      verdict: cleanVerdict,
-    });
-    expect(receipt.outcome).toBe("blocked");
-    expect(receipt.blockedAt).toBe("admit");
-    expect(receipt.blockedReason).toContain("sha256 mismatch");
+        const receipt = yield* runWithJudge(makeWasmJudgeLayer(tamperedDir), `mute-tampered-${boundary}`, {
+          preflight: cleanPreflight,
+          toolCalls: [{ callId: CallId.make("c1"), action: { kind: "bash", command: "ls" }, observation: cleanObservation }],
+          verdict: cleanVerdict,
+        });
+        expect(receipt.outcome).toBe("blocked");
+        expect(receipt.blockedAt).toBe(boundary);
+        expect(receipt.blockedReason).toContain("sha256 mismatch");
+      } finally {
+        rmSync(tamperedDir, { recursive: true, force: true });
+      }
+    }
   }),
 );
 

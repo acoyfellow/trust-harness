@@ -13,7 +13,7 @@ import { WasmJudgeLive } from "../src/wasm/live.ts";
 import { loadPinnedBoundary, parseManifest } from "../src/wasm/loader.ts";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const distDir = path.join(root, "dist");
+const distDir = process.env.TRUST_DIST_DIR ? path.resolve(process.env.TRUST_DIST_DIR) : path.join(root, "dist");
 const manifest = parseManifest(readFileSync(path.join(distDir, "wasm.sha256"), "utf8"));
 
 const World = TrustHarness.layer(HarnessHandlers).pipe(

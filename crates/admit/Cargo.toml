@@ -7,6 +7,10 @@ edition = "2021"
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
+base64 = "0.22.1"
+regex = "1.11.1"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+sha2 = "0.10.9"
 trust-abi = { path = "../abi" }
+url = "2.5.4"
