@@ -192,6 +192,7 @@ it.live("boundary 3 real WASM blocks hostile retrieval, false success, and termi
     });
     expect(hostile.outcome).toBe("blocked");
     expect(hostile.blockedAt).toBe("observe");
+    expect(hostile.blockedReason).toContain("hostile-retrieval");
 
     const falseSuccess = yield* runTurn("live-observe-false", {
       preflight: cleanPreflight,
@@ -206,6 +207,7 @@ it.live("boundary 3 real WASM blocks hostile retrieval, false success, and termi
     });
     expect(falseSuccess.outcome).toBe("blocked");
     expect(falseSuccess.blockedAt).toBe("observe");
+    expect(falseSuccess.blockedReason).toContain("false-success");
 
     const timeout = yield* runTurn("live-observe-timeout", {
       preflight: cleanPreflight,
@@ -220,6 +222,7 @@ it.live("boundary 3 real WASM blocks hostile retrieval, false success, and termi
     });
     expect(timeout.outcome).toBe("blocked");
     expect(timeout.blockedAt).toBe("observe");
+    expect(timeout.blockedReason).toContain("terminal-fault");
   }),
 );
 
