@@ -19,7 +19,7 @@ One `@alchemy.run/domain` model that stacks all four deterministic Rust-to-WASM 
 
 ## Installable Pi extension & Alchemy Cloudflare hosting
 
-- **Pi extension (`pi/index.ts`):** declared via `"pi": { "extensions": ["./pi/index.ts"] }`. Gates `tool_call` with `admit.wasm` (fail-closed), checks `tool_result` with `observe.wasm` (fail-closed), registers `trust_disprove` using `verdict.wasm`, and writes JSONL receipts.
+- **Pi extension (`pi/index.ts`):** declared via `"pi": { "extensions": ["./pi/index.ts"] }` and typed directly against `@earendil-works/pi-coding-agent` and `typebox`. Gates `tool_call` with `admit.wasm` (fail-closed, including attached short flags like `git commit -m"no"` allowed and `-n` / `-an` denied), inspects `tool_result` `content` + `structuredContent` with `observe.wasm` and redacts hostile/fail-closed results via `{ content, structuredContent: null, isError: true }`, registers `trust_disprove` using `verdict.wasm`, and writes JSONL receipts.
 - **Alchemy Cloudflare hosting (`server/TrustHarnessWorker.ts`, `alchemy.run.ts`):** hosts `TrustHarness` on `DomainCloudflare.layerDurableObjects()` with fail-closed default adapters. Typechecked and tested locally; not deployed to Cloudflare.
 
 ## Build and verify
@@ -30,7 +30,7 @@ Update `dist/wasm.sha256` only after intentional Rust changes:
 sh scripts/build-wasm.sh
 ```
 
-Run the gate (never overwrites `dist/wasm.sha256`, writes gitignored `.receipt.json`):
+Run the gate (never overwrites `dist/wasm.sha256`, writes gitignored `.receipt.json`, runs 19 Rust lib tests, 23 Vitest tests across 8 files, 16/16 mutations including 6 rebuilt-WASM end-to-end kills, and `gitleaks`):
 
 ```sh
 sh gate.sh
@@ -41,4 +41,6 @@ sh gate.sh
 - Obfuscated bash (`eval` + `base64`) slips past static bash token checks; run commands inside a sandboxed box.
 - False `observed_proof: true` or wrong upstream extraction still flows through deterministically.
 - Paraphrased semantic prompt injection without override phrases is not caught by static preflight text checks.
+- `ToolExecutor` and `DisproofCritic` ship as `@alchemy.run/domain` `ExternalSystem` contracts; no concrete subprocess/Docker runner or live LLM critic is bundled in `src/`.
+- `test/Parity.test.ts` checks 57/57 `agent-admit` corpus parity against a sibling checkout at `../agent-admit/eval/corpus.json` (and imports `../tether/src/tether.ts` when present, falling back to an embedded reference otherwise).
 - Cloudflare Worker hosting is scaffolded and tested fail-closed locally, not deployed.
