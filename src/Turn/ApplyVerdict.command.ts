@@ -4,6 +4,14 @@ import { TurnId } from "../ids.ts";
 import { TurnOutcome, VerdictAction, VerdictOutput } from "../schemas.ts";
 import { PendingObservations, TurnClosed, TurnNotPreflighted } from "./Turn.rejections.ts";
 
+export class VerdictPassed extends Domain.Event("VerdictPassed", {
+  held: Schema.Number,
+  broken: Schema.Number,
+  unbacked: Schema.Number,
+  wasmSha256: Schema.String,
+  at: Schema.String,
+}) {}
+
 export class TurnSettled extends Domain.Event("TurnSettled", {
   action: VerdictAction,
   outcome: TurnOutcome,
@@ -19,8 +27,8 @@ export class ApplyVerdict extends Domain.Command(
   {
     target: TurnId,
     input: { decision: VerdictOutput },
-    events: [TurnSettled],
+    events: [VerdictPassed, TurnSettled],
     rejects: [TurnNotPreflighted, PendingObservations, TurnClosed],
   },
-  { description: "Record boundary 4 (verdict) ruling after all admitted tool results are observed." },
+  { description: "Record boundary 4 (verdict) ruling; passing verdicts enter disproof challenge before closing." },
 ) {}

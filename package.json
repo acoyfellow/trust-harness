@@ -1,18 +1,25 @@
 {
   "name": "trust-harness",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
   "sideEffects": false,
+  "keywords": ["pi-package"],
+  "pi": {
+    "extensions": ["./pi/index.ts"]
+  },
   "scripts": {
     "build:wasm": "sh scripts/build-wasm.sh",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
+    "breaker": "node scripts/breaker.mjs",
     "mutate": "node scripts/mutate-check.mjs",
     "gate": "sh gate.sh"
   },
   "dependencies": {
+    "@alchemy.run/cloudflare": "2.0.0-beta.87",
     "@alchemy.run/domain": "2.0.0-beta.87",
+    "alchemy": "2.0.0-beta.87",
     "effect": "^4.1.4"
   },
   "devDependencies": {

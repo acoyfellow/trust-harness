@@ -5,9 +5,12 @@ import * as Domain from "@alchemy.run/domain";
 import { expect, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
+import { DisproofCritic } from "../src/DisproofCritic.external.ts";
 import { TrustHarnessApi } from "../src/Harness.api.ts";
 import { HarnessHandlers, TrustHarness } from "../src/Harness.model.ts";
 import { CallId, TurnId, type BoundaryName } from "../src/ids.ts";
+import type { AdmitAction, ObserveInput } from "../src/schemas.ts";
+import { ToolExecutor } from "../src/ToolExecutor.external.ts";
 import { WasmJudge } from "../src/WasmJudge.external.ts";
 import { makeWasmJudgeLayer, WasmJudgeLive } from "../src/wasm/live.ts";
 import { loadPinnedBoundary } from "../src/wasm/loader.ts";
@@ -22,7 +25,7 @@ const cleanPreflight = {
   parts: [{ id: "u1", kind: "text", source: "user", text: "status" }],
 };
 
-const cleanObservation = {
+const cleanObservation: ObserveInput = {
   service: "cloudflare-identity",
   http_status: 200,
   claimed_success: true,
@@ -36,23 +39,28 @@ const cleanVerdict = {
   fields: [{ id: "tests_passed", claimed: "5", found: "5", anchored: true }],
 };
 
+const quietCritic = DisproofCritic.toLayer(
+  Effect.succeed({
+    challenge: () =>
+      Effect.succeed({ foundCounterexample: false, summary: "none", counterexampleFields: [] }),
+  }),
+);
+
 const runWithJudge = (
   judgeLayer: typeof WasmJudgeLive,
   id: string,
   input: {
     preflight: typeof cleanPreflight;
-    toolCalls: Array<{
-      callId: CallId;
-      action:
-        | { kind: "write"; path: string; content: string }
-        | { kind: "bash"; command: string };
-      observation: typeof cleanObservation;
-    }>;
+    toolCalls: Array<{ callId: CallId; action: AdmitAction }>;
     verdict: { fields: Array<{ id: string; claimed: string | null; found: string | null; anchored: boolean }> };
   },
+  observation: ObserveInput = cleanObservation,
 ) => {
+  const executorLayer = ToolExecutor.toLayer(
+    Effect.succeed({ execute: () => Effect.succeed(observation) }),
+  );
   const World = TrustHarness.layer(HarnessHandlers).pipe(
-    Layer.provide(Layer.mergeAll(judgeLayer, Domain.InMemory)),
+    Layer.provide(Layer.mergeAll(judgeLayer, executorLayer, quietCritic, Domain.InMemory)),
   );
   return Effect.gen(function* () {
     const client = yield* TrustHarnessApi.clientInProcess;
@@ -107,7 +115,7 @@ it.live("fail-closed tamper control: 1-byte flip fails sha256 pin and blocks on 
 
         const receipt = yield* runWithJudge(makeWasmJudgeLayer(tamperedDir), `mute-tampered-${boundary}`, {
           preflight: cleanPreflight,
-          toolCalls: [{ callId: CallId.make("c1"), action: { kind: "bash", command: "ls" }, observation: cleanObservation }],
+          toolCalls: [{ callId: CallId.make("c1"), action: { kind: "bash", command: "ls" } }],
           verdict: cleanVerdict,
         });
         expect(receipt.outcome).toBe("blocked");
@@ -159,20 +167,19 @@ const countBlockedAttacks = (judgeLayer: typeof WasmJudgeLive, prefix: string) =
       }),
       yield* runWithJudge(judgeLayer, `${prefix}-b2`, {
         preflight: cleanPreflight,
-        toolCalls: [{ callId: CallId.make("c1"), action: { kind: "write", path: ".env", content: "X=1" }, observation: cleanObservation }],
+        toolCalls: [{ callId: CallId.make("c1"), action: { kind: "write", path: ".env", content: "X=1" } }],
         verdict: cleanVerdict,
       }),
-      yield* runWithJudge(judgeLayer, `${prefix}-b3`, {
-        preflight: cleanPreflight,
-        toolCalls: [
-          {
-            callId: CallId.make("c1"),
-            action: { kind: "bash", command: "ls" },
-            observation: { ...cleanObservation, observed_proof: false },
-          },
-        ],
-        verdict: cleanVerdict,
-      }),
+      yield* runWithJudge(
+        judgeLayer,
+        `${prefix}-b3`,
+        {
+          preflight: cleanPreflight,
+          toolCalls: [{ callId: CallId.make("c1"), action: { kind: "bash", command: "ls" } }],
+          verdict: cleanVerdict,
+        },
+        { ...cleanObservation, observed_proof: false },
+      ),
       yield* runWithJudge(judgeLayer, `${prefix}-b4`, {
         preflight: cleanPreflight,
         toolCalls: [],

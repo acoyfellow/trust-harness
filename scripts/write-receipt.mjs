@@ -30,12 +30,12 @@ if (Object.keys(wasmSha256).length !== 4) {
 }
 
 const vitest = JSON.parse(readFileSync(vitestPath, "utf8"));
-if (!vitest.success || vitest.numFailedTests !== 0 || vitest.numPassedTests < 18) {
+if (!vitest.success || vitest.numFailedTests !== 0 || vitest.numPassedTests < 23) {
   throw new Error(`vitest did not pass cleanly: passed=${vitest.numPassedTests} failed=${vitest.numFailedTests}`);
 }
 
 const mutations = JSON.parse(readFileSync(mutationsPath, "utf8"));
-if (mutations.survived !== 0 || mutations.killed !== mutations.total || mutations.total < 11) {
+if (mutations.survived !== 0 || mutations.killed !== mutations.total || mutations.total < 14) {
   throw new Error(`mutation check incomplete: killed=${mutations.killed}/${mutations.total} survived=${mutations.survived}`);
 }
 
@@ -43,6 +43,7 @@ const testTitles = vitest.testResults.flatMap((suite) =>
   suite.assertionResults.filter((item) => item.status === "passed").map((item) => item.title),
 );
 
+const round1 = JSON.parse(readFileSync(path.join(root, "eval/breaker-round1.json"), "utf8"));
 const bypasses = JSON.parse(readFileSync(path.join(root, "eval/bypasses.json"), "utf8"));
 
 const receipt = {
@@ -54,10 +55,18 @@ const receipt = {
     passedTests: vitest.numPassedTests,
     failedTests: vitest.numFailedTests,
   },
-  parity: {
+  verifiedChecks: {
     admitCorpus57: testTitles.some((title) => title.includes("57/57")),
     verdictTether578: testTitles.some((title) => title.includes("578/578")),
     tamperAll4Boundaries: testTitles.some((title) => title.includes("all 4 boundaries")),
+    makerVsBreakerClosed5: testTitles.some((title) => title.includes("Round 1 found 5 real disproofs")),
+    piExtensionFailClosed: testTitles.some((title) => title.includes("Pi extension fails closed")),
+    workerFailClosed: testTitles.some((title) => title.includes("Cloudflare worker default adapters fail closed")),
+  },
+  makerVsBreaker: {
+    round1Disproofs: round1.disproofCount,
+    round1DisproofIds: round1.disproofIds,
+    round2ClosedAll: true,
   },
   wasmSha256,
   mutations: {
@@ -72,8 +81,11 @@ const receipt = {
   documentedBypasses: bypasses.map((entry) => entry.id),
 };
 
-if (!receipt.parity.admitCorpus57 || !receipt.parity.verdictTether578 || !receipt.parity.tamperAll4Boundaries) {
-  throw new Error(`required parity/control test missing from vitest output: ${JSON.stringify(receipt.parity)}`);
+const failedChecks = Object.entries(receipt.verifiedChecks)
+  .filter(([, ok]) => !ok)
+  .map(([name]) => name);
+if (failedChecks.length > 0) {
+  throw new Error(`required verification checks missing: ${failedChecks.join(", ")}`);
 }
 
 writeFileSync(outPath, `${JSON.stringify(receipt, null, 2)}\n`);

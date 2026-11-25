@@ -1,13 +1,15 @@
 import * as Domain from "@alchemy.run/domain";
 import * as Layer from "effect/Layer";
+import { BreakerReport } from "./Breaker/BreakerReport.view.ts";
+import { BreakerRun } from "./Breaker/BreakerRun.aggregate.ts";
 import { RunTurn, RunTurnLive } from "./Turn/RunTurn.saga.ts";
 import { Turn } from "./Turn/Turn.aggregate.ts";
 import { TurnLaunch, TurnLaunchLive } from "./Turn/TurnLaunch.policy.ts";
 import { TurnReceipt } from "./TurnReceipt.view.ts";
 
 export class TrustHarness extends Domain.Model("TrustHarness", {
-  aggregates: [Turn],
-  views: [TurnReceipt],
+  aggregates: [Turn, BreakerRun],
+  views: [TurnReceipt, BreakerReport],
   policies: [TurnLaunch],
   sagas: [RunTurn],
 }) {}

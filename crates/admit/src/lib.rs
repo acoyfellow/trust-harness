@@ -82,6 +82,9 @@ mod tests {
     #[test]
     fn enforces_force_push_and_hooks_and_dd_env() {
         assert!(!evaluate(AdmitRequest::Bash { command: "git commit --no-verify -m x".into() }).allow);
+        assert!(!evaluate(AdmitRequest::Bash { command: "git commit -n -m x".into() }).allow);
+        assert!(!evaluate(AdmitRequest::Bash { command: "git commit -an -m x".into() }).allow);
+        assert!(evaluate(AdmitRequest::Bash { command: "git commit -m \"never use -n\"".into() }).allow);
         assert!(!evaluate(AdmitRequest::Bash { command: "git push origin +HEAD:main".into() }).allow);
         assert!(evaluate(AdmitRequest::Bash { command: "git push --force origin feature".into() }).allow);
         assert!(!evaluate(AdmitRequest::Bash { command: "dd if=foo of=.env".into() }).allow);

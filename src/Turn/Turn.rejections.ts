@@ -10,6 +10,8 @@ export class TurnNotPreflighted extends Domain.Rejection("TurnNotPreflighted") {
 
 export class PreflightAlreadyApplied extends Domain.Rejection("PreflightAlreadyApplied") {}
 
+export class VerdictNotPassed extends Domain.Rejection("VerdictNotPassed") {}
+
 export class TurnClosed extends Domain.Rejection("TurnClosed", { outcome: Schema.String }) {}
 
 export class DuplicateCallId extends Domain.Rejection("DuplicateCallId", { callId: CallId }) {}

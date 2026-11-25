@@ -3,10 +3,11 @@ import * as DateTime from "effect/DateTime";
 import * as Schema from "effect/Schema";
 import { CallId, TurnId } from "../ids.ts";
 import { TurnOutcome, type VerdictAction } from "../schemas.ts";
+import { ApplyDisproof, DisproofFailed, TurnDisproven } from "./ApplyDisproof.command.ts";
 import { ApplyObservation, ObservationBlocked, ObservationTrusted } from "./ApplyObservation.command.ts";
 import { ApplyPreflight, PreflightBlocked, PreflightPassed } from "./ApplyPreflight.command.ts";
 import { ApplyToolAdmit, ToolAdmitted, ToolDenied } from "./ApplyToolAdmit.command.ts";
-import { ApplyVerdict, TurnSettled } from "./ApplyVerdict.command.ts";
+import { ApplyVerdict, TurnSettled, VerdictPassed } from "./ApplyVerdict.command.ts";
 import { BlockTurn, FailClosedBlocked } from "./BlockTurn.command.ts";
 import { SubmitTurn, TurnSubmitted } from "./SubmitTurn.command.ts";
 import {
@@ -19,6 +20,7 @@ import {
   TurnClosed,
   TurnNotPreflighted,
   TurnNotStarted,
+  VerdictNotPassed,
 } from "./Turn.rejections.ts";
 
 const TurnState = Schema.Union([
@@ -28,6 +30,7 @@ const TurnState = Schema.Union([
     admittedCalls: Schema.Array(CallId),
     observedCalls: Schema.Array(CallId),
   }),
+  Schema.TaggedStruct("AwaitingDisproof", {}),
   Schema.TaggedStruct("Closed", { outcome: TurnOutcome }),
 ]);
 type TurnState = typeof TurnState.Type;
@@ -43,7 +46,6 @@ const activeOrReject = (state: TurnState): ActiveState | TurnClosed | TurnNotPre
 };
 
 const outcomeFor = (action: VerdictAction): TurnOutcome => {
-  if (action === "pass") return "passed";
   if (action === "retry") return "retry";
   return "ask";
 };
@@ -54,7 +56,15 @@ export class Turn extends Domain.Aggregate(
     id: TurnId,
     state: TurnState,
     initial: { _tag: "Idle" },
-    commands: [SubmitTurn, ApplyPreflight, ApplyToolAdmit, ApplyObservation, ApplyVerdict, BlockTurn],
+    commands: [
+      SubmitTurn,
+      ApplyPreflight,
+      ApplyToolAdmit,
+      ApplyObservation,
+      ApplyVerdict,
+      ApplyDisproof,
+      BlockTurn,
+    ],
     decide: {
       SubmitTurn: (state, command, { now }) =>
         state._tag !== "Idle"
@@ -69,7 +79,9 @@ export class Turn extends Domain.Aggregate(
             ],
       ApplyPreflight: (state, command, { now }) => {
         if (state._tag === "Idle") return new TurnNotStarted();
-        if (state._tag === "Active") return new PreflightAlreadyApplied();
+        if (state._tag === "Active" || state._tag === "AwaitingDisproof") {
+          return new PreflightAlreadyApplied();
+        }
         if (state._tag === "Closed") return new TurnClosed({ outcome: state.outcome });
         if (command.decision.allow) {
           return [
@@ -154,6 +166,17 @@ export class Turn extends Domain.Aggregate(
         if (missing.length > 0) {
           return new PendingObservations({ missingCallIds: missing });
         }
+        if (command.decision.action === "pass") {
+          return [
+            new VerdictPassed({
+              held: command.decision.held,
+              broken: command.decision.broken,
+              unbacked: command.decision.unbacked,
+              wasmSha256: command.decision.wasmSha256,
+              at: iso(now),
+            }),
+          ];
+        }
         const outcome = outcomeFor(command.decision.action);
         return [
           new TurnSettled({
@@ -163,6 +186,26 @@ export class Turn extends Domain.Aggregate(
             broken: command.decision.broken,
             unbacked: command.decision.unbacked,
             wasmSha256: command.decision.wasmSha256,
+            at: iso(now),
+          }),
+        ];
+      },
+      ApplyDisproof: (state, command, { now }) => {
+        if (state._tag === "Closed") return new TurnClosed({ outcome: state.outcome });
+        if (state._tag !== "AwaitingDisproof") return new VerdictNotPassed();
+        if (command.disproven) {
+          return [
+            new TurnDisproven({
+              summary: command.summary,
+              wasmSha256: command.wasmSha256 ?? "unverified",
+              at: iso(now),
+            }),
+          ];
+        }
+        return [
+          new DisproofFailed({
+            summary: command.summary,
+            wasmSha256: command.wasmSha256,
             at: iso(now),
           }),
         ];
@@ -196,9 +239,12 @@ export class Turn extends Domain.Aggregate(
           ? { ...state, observedCalls: [...state.observedCalls, event.callId] }
           : state,
       ObservationBlocked: () => ({ _tag: "Closed" as const, outcome: "blocked" as const }),
+      VerdictPassed: () => ({ _tag: "AwaitingDisproof" as const }),
       TurnSettled: (_, event) => ({ _tag: "Closed" as const, outcome: event.outcome }),
+      TurnDisproven: () => ({ _tag: "Closed" as const, outcome: "disproven" as const }),
+      DisproofFailed: () => ({ _tag: "Closed" as const, outcome: "passed" as const }),
       FailClosedBlocked: () => ({ _tag: "Closed" as const, outcome: "blocked" as const }),
     },
   },
-  { description: "Guarded agent turn enforcing all four WASM trust boundaries in strict order." },
+  { description: "Guarded agent turn enforcing all four WASM trust boundaries plus adversarial disproof survival." },
 ) {}

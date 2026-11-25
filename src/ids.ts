@@ -6,5 +6,8 @@ export type TurnId = typeof TurnId.Type;
 export const CallId = Schema.String.pipe(Schema.brand("CallId"));
 export type CallId = typeof CallId.Type;
 
+export const BreakerRunId = Schema.String.pipe(Schema.brand("BreakerRunId"));
+export type BreakerRunId = typeof BreakerRunId.Type;
+
 export const BoundaryName = Schema.Literals(["preflight", "admit", "observe", "verdict"]);
 export type BoundaryName = typeof BoundaryName.Type;

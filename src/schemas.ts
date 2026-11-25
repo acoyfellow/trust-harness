@@ -1,5 +1,5 @@
 import * as Schema from "effect/Schema";
-import { CallId } from "./ids.ts";
+import { BoundaryName, CallId } from "./ids.ts";
 
 export const RequestPart = Schema.Struct({
   id: Schema.String,
@@ -123,9 +123,23 @@ export type VerdictOutput = typeof VerdictOutput.Type;
 export const PlannedToolCall = Schema.Struct({
   callId: CallId,
   action: AdmitAction,
-  observation: ObserveInput,
 });
 export type PlannedToolCall = typeof PlannedToolCall.Type;
 
-export const TurnOutcome = Schema.Literals(["pending", "passed", "retry", "ask", "blocked"]);
+export const DisproofProposal = Schema.Struct({
+  foundCounterexample: Schema.Boolean,
+  summary: Schema.String,
+  counterexampleFields: Schema.Array(ClaimField),
+});
+export type DisproofProposal = typeof DisproofProposal.Type;
+
+export const DisproofWitness = Schema.Struct({
+  attackId: Schema.String,
+  boundary: BoundaryName,
+  wasmSha256: Schema.String,
+  reason: Schema.String,
+});
+export type DisproofWitness = typeof DisproofWitness.Type;
+
+export const TurnOutcome = Schema.Literals(["pending", "passed", "disproven", "retry", "ask", "blocked"]);
 export type TurnOutcome = typeof TurnOutcome.Type;

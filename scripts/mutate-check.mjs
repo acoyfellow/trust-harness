@@ -46,6 +46,13 @@ const mutations = [
     kind: "vitest",
   },
   {
+    id: "domain-skip-disproof-gate",
+    file: "src/Turn/Turn.aggregate.ts",
+    find: 'if (state._tag !== "AwaitingDisproof") return new VerdictNotPassed();',
+    replace: 'if (false && state._tag !== "AwaitingDisproof") return new VerdictNotPassed();',
+    kind: "vitest",
+  },
+  {
     id: "loader-skip-sha256-check",
     file: "src/wasm/loader.ts",
     find: "if (actual !== expected) {",
@@ -57,6 +64,13 @@ const mutations = [
     file: "src/Turn/RunTurn.saga.ts",
     find: "if (!admitResult.success.allow) return;",
     replace: "if (false && !admitResult.success.allow) return;",
+    kind: "vitest",
+  },
+  {
+    id: "saga-ignore-verified-disproof",
+    file: "src/Turn/RunTurn.saga.ts",
+    find: 'const disproven = verified.success.action !== "pass";',
+    replace: "const disproven = false;",
     kind: "vitest",
   },
   {
@@ -72,6 +86,14 @@ const mutations = [
     file: "crates/admit/src/command.rs",
     find: "if secret_paths().is_match(target_path) {",
     replace: "if false && secret_paths().is_match(target_path) {",
+    kind: "wasm",
+    boundary: "admit",
+  },
+  {
+    id: "wasm-admit-drop-short-no-verify",
+    file: "crates/admit/src/command.rs",
+    find: "(word.starts_with('-') && !word.starts_with(\"--\") && word[1..].contains('n'))",
+    replace: "false",
     kind: "wasm",
     boundary: "admit",
   },
@@ -122,7 +144,7 @@ const runWasmMutation = (id, boundary) => {
     const manifest = files.map((name) => `${sha256File(path.join(tempDir, name))}  ${name}`).join("\n") + "\n";
     writeFileSync(path.join(tempDir, "wasm.sha256"), manifest, "utf8");
     try {
-      execFileSync("npx", ["vitest", "run", "test/LiveWasm.test.ts", "test/Parity.test.ts"], {
+      execFileSync("npx", ["vitest", "run", "test/LiveWasm.test.ts", "test/Parity.test.ts", "test/Breaker.test.ts"], {
         cwd: root,
         env: { ...process.env, TRUST_DIST_DIR: tempDir },
         stdio: "pipe",

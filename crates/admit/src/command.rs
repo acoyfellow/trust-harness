@@ -464,8 +464,58 @@ fn force_push_denial(command: &str) -> Option<&'static str> {
     None
 }
 
+const COMMIT_OPTIONS_WITH_VALUE: [&str; 12] = [
+    "-m",
+    "--message",
+    "-F",
+    "--file",
+    "-C",
+    "--reuse-message",
+    "-c",
+    "--reedit-message",
+    "--author",
+    "--date",
+    "-t",
+    "--template",
+];
+
+fn commit_hooks_disabled(command: &str) -> bool {
+    if hook_off().is_match(command) {
+        return true;
+    }
+    for words in simple_commands(command) {
+        if nested_shell_command(&words).is_some_and(|nested| commit_hooks_disabled(nested)) {
+            return true;
+        }
+        let Some(subcommand) = git_subcommand_index(&words) else {
+            continue;
+        };
+        if words[subcommand] != "commit" {
+            continue;
+        }
+        let args = &words[subcommand + 1..];
+        let mut index = 0;
+        while let Some(word) = args.get(index) {
+            if word == "--" {
+                break;
+            }
+            if COMMIT_OPTIONS_WITH_VALUE.contains(&word.as_str()) {
+                index += 2;
+                continue;
+            }
+            if word == "--no-verify"
+                || (word.starts_with('-') && !word.starts_with("--") && word[1..].contains('n'))
+            {
+                return true;
+            }
+            index += 1;
+        }
+    }
+    false
+}
+
 pub fn admit_command(kind: &str, text: &str, target_paths: &[String]) -> Decision {
-    if kind == "bash" && hook_off().is_match(text) {
+    if kind == "bash" && commit_hooks_disabled(text) {
         return Decision {
             allow: false,
             reason: "git commit with hooks disabled is not allowed".to_string(),
