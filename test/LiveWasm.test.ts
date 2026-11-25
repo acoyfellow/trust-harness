@@ -169,6 +169,18 @@ it.live("boundary 2 real WASM denies .env write, --no-verify/-n bash, and non-pu
     expect(shortNoVerify.receipt.outcome).toBe("blocked");
     expect(shortNoVerify.receipt.blockedAt).toBe("admit");
 
+    const attachedMsg = yield* runTurnWith({}, "live-admit-attached-m", {
+      preflight: cleanPreflight,
+      toolCalls: [
+        { callId: CallId.make("c1"), action: { kind: "bash", command: 'git commit -m"don\'t break main"' } },
+        { callId: CallId.make("c2"), action: { kind: "bash", command: 'git commit -m"no"' } },
+        { callId: CallId.make("c3"), action: { kind: "bash", command: "git commit -Fnotes.txt" } },
+      ],
+      verdict: cleanVerdict,
+    });
+    expect(attachedMsg.executedCalls).toBe(3);
+    expect(attachedMsg.receipt.outcome).toBe("passed");
+
     const badLock = yield* runTurnWith({}, "live-admit-lockfile", {
       preflight: cleanPreflight,
       toolCalls: [

@@ -464,20 +464,17 @@ fn force_push_denial(command: &str) -> Option<&'static str> {
     None
 }
 
-const COMMIT_OPTIONS_WITH_VALUE: [&str; 12] = [
-    "-m",
+const COMMIT_LONG_OPTIONS_WITH_VALUE: [&str; 6] = [
     "--message",
-    "-F",
     "--file",
-    "-C",
     "--reuse-message",
-    "-c",
     "--reedit-message",
     "--author",
     "--date",
-    "-t",
-    "--template",
 ];
+
+const COMMIT_SHORT_OPTIONS_TAKING_VALUE: [char; 5] = ['m', 'F', 'C', 'c', 't'];
+const COMMIT_SHORT_OPTIONS_OPTIONAL_VALUE: [char; 2] = ['u', 'S'];
 
 fn commit_hooks_disabled(command: &str) -> bool {
     if hook_off().is_match(command) {
@@ -499,14 +496,32 @@ fn commit_hooks_disabled(command: &str) -> bool {
             if word == "--" {
                 break;
             }
-            if COMMIT_OPTIONS_WITH_VALUE.contains(&word.as_str()) {
+            if COMMIT_LONG_OPTIONS_WITH_VALUE.contains(&word.as_str()) || word == "--template" {
                 index += 2;
                 continue;
             }
-            if word == "--no-verify"
-                || (word.starts_with('-') && !word.starts_with("--") && word[1..].contains('n'))
-            {
+            if word == "--no-verify" {
                 return true;
+            }
+            if word.starts_with('-') && !word.starts_with("--") {
+                let chars: Vec<char> = word[1..].chars().collect();
+                let mut skip_next = false;
+                for (pos, ch) in chars.iter().enumerate() {
+                    if *ch == 'n' {
+                        return true;
+                    }
+                    if COMMIT_SHORT_OPTIONS_TAKING_VALUE.contains(ch) {
+                        if pos + 1 == chars.len() {
+                            skip_next = true;
+                        }
+                        break;
+                    }
+                    if COMMIT_SHORT_OPTIONS_OPTIONAL_VALUE.contains(ch) {
+                        break;
+                    }
+                }
+                index += if skip_next { 2 } else { 1 };
+                continue;
             }
             index += 1;
         }

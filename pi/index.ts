@@ -1,42 +1,17 @@
 import { appendFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import type {
+  ExtensionAPI,
+  ToolCallEvent,
+  ToolCallEventResult,
+  ToolResultEvent,
+  ToolResultEventResult,
+} from "@earendil-works/pi-coding-agent";
+import { Type } from "typebox";
 import type { BoundaryName } from "../src/ids.ts";
 import type { ClaimField } from "../src/schemas.ts";
 import { loadPinnedBoundary, type JudgeHandle } from "../src/wasm/loader.ts";
-
-export type ToolCallEvent = {
-  readonly toolName: string;
-  readonly input: Record<string, unknown>;
-};
-
-export type ToolResultEvent = {
-  readonly toolName: string;
-  readonly resultText: string;
-  readonly isError?: boolean;
-};
-
-export type ToolCallOutcome = { readonly block: true; readonly reason: string } | undefined;
-
-export type ToolResultOutcome =
-  | { readonly block: true; readonly reason: string; readonly status: string }
-  | undefined;
-
-export type PiToolDefinition = {
-  readonly name: string;
-  readonly description: string;
-  readonly parameters: Record<string, unknown>;
-  readonly execute: (
-    toolCallId: string,
-    params: Record<string, unknown>,
-  ) => Promise<{ content: Array<{ type: "text"; text: string }>; details: Record<string, unknown> }>;
-};
-
-export type PiExtensionHost = {
-  on(event: "tool_call", handler: (event: ToolCallEvent) => Promise<ToolCallOutcome>): void;
-  on(event: "tool_result", handler: (event: ToolResultEvent) => Promise<ToolResultOutcome>): void;
-  registerTool(tool: PiToolDefinition): void;
-};
 
 export type ExtensionOptions = {
   readonly distDir?: string;
@@ -46,6 +21,32 @@ export type ExtensionOptions = {
 const defaultDistDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../dist");
 const GATED_TOOLS = new Set(["bash", "write", "edit"]);
 const LOCKFILE_RE = /(?:^|\/)(?:package-lock\.json|yarn\.lock|pnpm-lock\.yaml|Cargo\.lock)$/i;
+
+const ClaimFieldSchema = Type.Object({
+  id: Type.String(),
+  claimed: Type.Union([Type.String(), Type.Null()]),
+  found: Type.Union([Type.String(), Type.Null()]),
+  anchored: Type.Boolean(),
+});
+
+type DisproveDetails = {
+  readonly outcome: string;
+  readonly disproofVerified: boolean;
+  readonly reason: string;
+  readonly wasmSha256: string | null;
+  readonly primary?: {
+    action?: string;
+    held?: number;
+    broken?: number;
+    unbacked?: number;
+    error?: string;
+  };
+};
+
+const DisproveParamsSchema = Type.Object({
+  fields: Type.Array(ClaimFieldSchema),
+  counterexampleFields: Type.Optional(Type.Array(ClaimFieldSchema)),
+});
 
 const recordReceipt = async (receiptPath: string | undefined, entry: Record<string, unknown>) => {
   if (!receiptPath) return;
@@ -71,6 +72,17 @@ const buildAdmitAction = (toolName: string, input: Record<string, unknown>) => {
   return { kind: "edit", path: targetPath, payload: text };
 };
 
+const extractResultText = (event: ToolResultEvent): string => {
+  const parts: string[] = [];
+  for (const item of event.content) {
+    if (item.type === "text") parts.push(item.text);
+  }
+  if (event.structuredContent !== undefined && event.structuredContent !== null) {
+    parts.push(JSON.stringify(event.structuredContent));
+  }
+  return parts.join("\n");
+};
+
 export const createTrustHarnessExtension = (options: ExtensionOptions = {}) => {
   const distDir = options.distDir ?? process.env.TRUST_DIST_DIR ?? defaultDistDir;
   const receiptPath = options.receiptPath ?? process.env.TRUST_RECEIPTS;
@@ -84,8 +96,8 @@ export const createTrustHarnessExtension = (options: ExtensionOptions = {}) => {
     return loaded;
   };
 
-  return (pi: PiExtensionHost): void => {
-    pi.on("tool_call", async (event) => {
+  return (pi: ExtensionAPI): void => {
+    pi.on("tool_call", async (event: ToolCallEvent): Promise<ToolCallEventResult | undefined> => {
       const loaded = load("admit");
       if (!loaded.ok) {
         const reason = `fail-closed: ${loaded.error.reason}`;
@@ -110,7 +122,7 @@ export const createTrustHarnessExtension = (options: ExtensionOptions = {}) => {
         return undefined;
       }
 
-      const action = buildAdmitAction(event.toolName, event.input);
+      const action = buildAdmitAction(event.toolName, event.input as Record<string, unknown>);
       const reply = loaded.handle.evalJson(action) as { allow?: boolean; reason?: string; error?: string };
       const allow = reply.allow === true && !reply.error;
       const reason = reply.error ? `fail-closed: ${reply.error}` : String(reply.reason ?? "denied");
@@ -127,7 +139,7 @@ export const createTrustHarnessExtension = (options: ExtensionOptions = {}) => {
       return undefined;
     });
 
-    pi.on("tool_result", async (event) => {
+    pi.on("tool_result", async (event: ToolResultEvent): Promise<ToolResultEventResult | undefined> => {
       const loaded = load("observe");
       if (!loaded.ok) {
         const reason = `fail-closed: ${loaded.error.reason}`;
@@ -135,12 +147,18 @@ export const createTrustHarnessExtension = (options: ExtensionOptions = {}) => {
           boundary: "observe",
           tool: event.toolName,
           allow: false,
+          status: "fail-closed",
           reason,
           wasmSha256: null,
         });
-        return { block: true, reason, status: "fail-closed" };
+        return {
+          content: [{ type: "text", text: `[trust-harness fail-closed] ${reason}` }],
+          structuredContent: null,
+          isError: true,
+        };
       }
 
+      const retrievedText = extractResultText(event);
       const reply = loaded.handle.evalJson({
         service: event.toolName,
         http_status: event.isError ? 500 : 200,
@@ -148,7 +166,7 @@ export const createTrustHarnessExtension = (options: ExtensionOptions = {}) => {
         observed_proof: !event.isError,
         terminal_fault: event.isError ? "tool-error" : "none",
         retrieval_authority: "none",
-        retrieved_text: event.resultText,
+        retrieved_text: retrievedText,
       }) as { allow?: boolean; status?: string; reason?: string; error?: string };
 
       const allow = reply.allow === true && !reply.error;
@@ -164,38 +182,36 @@ export const createTrustHarnessExtension = (options: ExtensionOptions = {}) => {
         wasmSha256: loaded.handle.sha256,
       });
 
-      if (!allow) return { block: true, reason, status };
+      if (!allow) {
+        return {
+          content: [{ type: "text", text: `[trust-harness blocked ${status}] ${reason}` }],
+          structuredContent: null,
+          isError: true,
+        };
+      }
       return undefined;
     });
 
     pi.registerTool({
       name: "trust_disprove",
+      label: "Trust Disprove",
       description: "Verify claimed fields with pinned verdict.wasm and test whether a counterexample disproves the turn.",
-      parameters: {
-        type: "object",
-        properties: {
-          fields: { type: "array" },
-          counterexampleFields: { type: "array" },
-        },
-        required: ["fields"],
-      },
+      parameters: DisproveParamsSchema,
       execute: async (_toolCallId, params) => {
         const loaded = load("verdict");
         if (!loaded.ok) {
-          const details = {
+          const details: DisproveDetails = {
             outcome: "blocked",
             disproofVerified: false,
             reason: `fail-closed: ${loaded.error.reason}`,
             wasmSha256: null,
           };
           await recordReceipt(receiptPath, { boundary: "verdict", ...details });
-          return { content: [{ type: "text", text: JSON.stringify(details) }], details };
+          return { content: [{ type: "text" as const, text: JSON.stringify(details) }], details };
         }
 
-        const fields = Array.isArray(params.fields) ? (params.fields as ClaimField[]) : [];
-        const counterexampleFields = Array.isArray(params.counterexampleFields)
-          ? (params.counterexampleFields as ClaimField[])
-          : [];
+        const fields: ClaimField[] = params.fields;
+        const counterexampleFields: ClaimField[] = params.counterexampleFields ?? [];
 
         const primary = loaded.handle.evalJson({ fields }) as {
           action?: string;
@@ -207,23 +223,26 @@ export const createTrustHarnessExtension = (options: ExtensionOptions = {}) => {
 
         let outcome = primary.action === "pass" ? "passed" : String(primary.action ?? "blocked");
         let disproofVerified = false;
+        let reason = outcome;
 
         if (primary.action === "pass" && counterexampleFields.length > 0) {
           const challenge = loaded.handle.evalJson({ fields: counterexampleFields }) as { action?: string };
           if (challenge.action !== "pass") {
             disproofVerified = true;
             outcome = "disproven";
+            reason = "counterexample verified by verdict.wasm";
           }
         }
 
-        const details = {
+        const details: DisproveDetails = {
           outcome,
           disproofVerified,
+          reason,
           primary,
           wasmSha256: loaded.handle.sha256,
         };
         await recordReceipt(receiptPath, { boundary: "verdict", ...details });
-        return { content: [{ type: "text", text: JSON.stringify(details) }], details };
+        return { content: [{ type: "text" as const, text: JSON.stringify(details) }], details };
       },
     });
   };

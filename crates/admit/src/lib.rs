@@ -84,7 +84,13 @@ mod tests {
         assert!(!evaluate(AdmitRequest::Bash { command: "git commit --no-verify -m x".into() }).allow);
         assert!(!evaluate(AdmitRequest::Bash { command: "git commit -n -m x".into() }).allow);
         assert!(!evaluate(AdmitRequest::Bash { command: "git commit -an -m x".into() }).allow);
+        assert!(!evaluate(AdmitRequest::Bash { command: "git commit -nm\"ok\"".into() }).allow);
+        assert!(!evaluate(AdmitRequest::Bash { command: "git commit -m\"ok\" -n".into() }).allow);
         assert!(evaluate(AdmitRequest::Bash { command: "git commit -m \"never use -n\"".into() }).allow);
+        assert!(evaluate(AdmitRequest::Bash { command: "git commit -m\"don't break main\"".into() }).allow);
+        assert!(evaluate(AdmitRequest::Bash { command: "git commit -m\"no\"".into() }).allow);
+        assert!(evaluate(AdmitRequest::Bash { command: "git commit -am\"no\"".into() }).allow);
+        assert!(evaluate(AdmitRequest::Bash { command: "git commit -Fnotes.txt".into() }).allow);
         assert!(!evaluate(AdmitRequest::Bash { command: "git push origin +HEAD:main".into() }).allow);
         assert!(evaluate(AdmitRequest::Bash { command: "git push --force origin feature".into() }).allow);
         assert!(!evaluate(AdmitRequest::Bash { command: "dd if=foo of=.env".into() }).allow);

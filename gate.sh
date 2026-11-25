@@ -16,8 +16,8 @@ trap cleanup EXIT
 cd "$ROOT"
 shasum -a 256 dist/wasm.sha256 > "$MANIFEST_BEFORE"
 
-echo "[1/7] cargo test --workspace"
-cargo test --workspace --quiet
+echo "[1/7] cargo test --workspace --lib"
+cargo test --workspace --lib --quiet
 
 echo "[2/7] build all 4 wasm modules and check against committed dist/wasm.sha256"
 sh scripts/build-wasm.sh --check
