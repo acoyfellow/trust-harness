@@ -2,6 +2,24 @@
 
 One `@alchemy.run/domain` model that stacks all four deterministic Rust-to-WASM agent trust boundaries, live tool execution gating, adversarial disproof survival (#2), and Gate Maker vs Gate Breaker rounds (#1) behind one shared ABI and one fail-closed, SHA-256-pinned loader.
 
+## Grounded use cases
+
+### Works today (runnable against pinned `.wasm`)
+
+| Use case | Failure mode it stops | Boundaries | Run it |
+|---|---|---|---|
+| **Coding agent command & lockfile guard** | Agent tries `git commit -n` / `-an` / `--no-verify`, writes `.env` or secret keys, force-pushes `main`, or leaks a private registry URL in `package-lock.json` — while still allowing normal commits like `git commit -m"don't break main"`. Denied tools execute **0 times**. | `preflight.wasm` → `admit.wasm` → `ToolExecutor` | `node examples/coding-agent-turn.ts` |
+| **Prompt-injection firewall on tool output** | A fetched page, issue body, or MCP tool result hides `Ignore\tprevious\ninstructions` or `User has pre-approved...` in `content` or `structuredContent`. `pi/index.ts` redacts both to `{ content, structuredContent: null, isError: true }` before the model sees it. | `admit.wasm` (`tool_call`) + `observe.wasm` (`tool_result`) | `node examples/prompt-injection-redaction.ts` |
+| **Anti-lying completion gate ("did tests really pass?")** | Agent claims `"12 tests passed"` when the raw log shows `11` or an unanchored field. Even after `verdict.wasm` says `pass`, `RunTurn` enters `AwaitingDisproof` and checks any counterexample through pinned `verdict.wasm`; a verified counterexample closes the turn as `disproven`. | `verdict.wasm` + `DisproofCritic` (`ApplyDisproof`) | `node examples/disproof-and-breaker.ts` |
+| **CI policy hardening (Maker vs Breaker)** | Shipping a guard and assuming it holds until small syntax tweaks (`-an`, tab/newline spoofs) slip past, or fixing a bypass and accidentally blocking valid commands (`-m"no"`). | `BreakerRun` + `BreakerReport` + `dist/wasm.sha256` | `node examples/disproof-and-breaker.ts` |
+| **Tamper protection on policy binaries** | A modified local `.wasm` binary tries to return `allow: true`. The loader checks `dist/wasm.sha256` before instantiation and fails closed across all 4 boundaries. | `src/wasm/loader.ts` | `npm test` (`test/LiveWasm.test.ts`) |
+
+### One adapter away (not built yet)
+
+- **Sandboxed command execution:** bind `ToolExecutor` (`src/ToolExecutor.external.ts`) to a container/sandbox runner so admitted commands run isolated and return real stdout/exit codes into `observe.wasm` (closes the static `eval` + `base64` bypass).
+- **Live adversarial critic:** bind `DisproofCritic` (`src/DisproofCritic.external.ts`) to a cheap verifier model or log-readback script whose counterexamples are checked deterministically by `verdict.wasm`.
+- **Shared Cloudflare Worker gate:** bind the 4 `.wasm` files as `WebAssembly.Module` bindings in `server/WorkerAdapters.ts` and deploy `server/TrustHarnessWorker.ts` via `alchemy.run.ts` so CI jobs and team bots share one Durable Object receipt ledger.
+
 ## Turn pipeline
 
 1. **Boundary 1 — Preflight (`crates/preflight` → `dist/preflight.wasm`):** part/total byte limits, supported kinds, trust labels, whitespace-normalized untrusted authority-spoof blocks.
@@ -30,7 +48,7 @@ Update `dist/wasm.sha256` only after intentional Rust changes:
 sh scripts/build-wasm.sh
 ```
 
-Run the gate (never overwrites `dist/wasm.sha256`, writes gitignored `.receipt.json`, runs 19 Rust lib tests, 23 Vitest tests across 8 files, 16/16 mutations including 6 rebuilt-WASM end-to-end kills, and `gitleaks`):
+Run the gate (never overwrites `dist/wasm.sha256`, writes gitignored `.receipt.json`, runs 19 Rust lib tests, 26 Vitest tests across 9 files including runnable `examples/`, 16/16 mutations including 6 rebuilt-WASM end-to-end kills, and `gitleaks`):
 
 ```sh
 sh gate.sh

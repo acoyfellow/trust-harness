@@ -9,5 +9,5 @@
     "skipLibCheck": true,
     "types": ["node"]
   },
-  "include": ["src", "test", "pi", "server", "alchemy.run.ts"]
+  "include": ["src", "test", "pi", "server", "examples", "alchemy.run.ts"]
 }
